@@ -1,6 +1,6 @@
-import type { RandomUser } from "./RandomUserService";
+import type { User } from "./User/types";
 
-export async function fillRegistrationForm(page: any, user: RandomUser) {
+export async function fillRegistrationForm(page: any, user: User) {
   // Fill email field
   await page.type('input[type="email"], input[name="email"]', user.email);
 
@@ -17,7 +17,7 @@ export async function fillRegistrationForm(page: any, user: RandomUser) {
   // Handle date of birth - month is dropdown, day/year are input fields
   try {
     // Parse the date to get month, day, year
-    const dobDate = new Date(user.dob.date);
+    const dobDate = new Date(user.dob);
     const month = dobDate.getMonth() + 1; // getMonth() returns 0-11
     const day = dobDate.getDate();
     const year = dobDate.getFullYear();
@@ -77,8 +77,8 @@ export async function fillRegistrationForm(page: any, user: RandomUser) {
       // Try to find exact match first, then partial match
       let selectedValue = null;
       for (const option of stateOptions) {
-        if (option.text.toLowerCase().includes(user.location.state.toLowerCase()) ||
-          option.value.toLowerCase().includes(user.location.state.toLowerCase())) {
+        if (option.text.toLowerCase().includes(user.location.toLowerCase()) ||
+          option.value.toLowerCase().includes(user.location.toLowerCase())) {
           selectedValue = option.value;
           break;
         }
@@ -86,10 +86,10 @@ export async function fillRegistrationForm(page: any, user: RandomUser) {
 
       if (selectedValue) {
         await page.select(stateSelector, selectedValue);
-        console.log(`Selected state: ${user.location.state} with value: ${selectedValue}`);
+        console.log(`Selected state: ${user.location} with value: ${selectedValue}`);
       } else {
-        console.log(`Could not find state option for: ${user.location.state}`);
-        console.log(`User state: ${user.location.state}`);
+        console.log(`Could not find state option for: ${user.location}`);
+        console.log(`User state: ${user.location}`);
         console.log(`Available options: ${stateOptions.map((opt: any) => `${opt.text} (${opt.value})`).join(', ')}`);
       }
     } else {

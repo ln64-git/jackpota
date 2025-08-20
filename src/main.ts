@@ -1,7 +1,7 @@
 // src/main.ts
 import puppeteer from "puppeteer";
-import { RandomUserService, type RandomUser, } from "./jackpota/RandomUserService";
 import { fillRegistrationForm } from "./jackpota/jackpota";
+import { JackpotaUser } from "./jackpota/User/User";
 
 // Optional env/config
 const TARGET_URL = process.env.TARGET_URL ?? "https://www.jackpota.com/register";
@@ -32,8 +32,7 @@ async function main() {
     await page.screenshot({ path: beforePath as `${string}.png` | `${string}.jpeg` | `${string}.webp` });
 
     // ---- Build user (User logic stays fully separate) ----
-    const userService = new RandomUserService({ require21Plus: true });
-    const user: RandomUser = await userService.buildUser();
+    const user = new JackpotaUser();
     console.log("Built user:", user);
 
     // ---- Fill form (this function should NOT build users) ----
@@ -44,7 +43,7 @@ async function main() {
     await page.screenshot({ path: afterPath as `${string}.png` | `${string}.jpeg` | `${string}.webp` });
 
     console.log("Form automation completed successfully!");
-    
+
   } catch (err) {
     console.error("An error occurred:", err);
   } finally {
