@@ -1,0 +1,101 @@
+import type { RandomUser } from "./RandomUserService";
+
+export async function fillRegistrationForm(page: any, user: RandomUser) {
+  // Fill email field
+  await page.type('input[type="email"], input[name="email"]', user.email);
+
+  // Fill password field (generate a random password since it's not in user data)
+  const password = "Password123!";
+  await page.type('input[type="password"], input[name="password"]', password);
+
+  // Fill first name field
+  await page.type('input[name="firstName"], input[name="first_name"], input[name="firstname"]', user.name.first);
+
+  // Fill last name field
+  await page.type('input[name="lastName"], input[name="last_name"], input[name="lastname"]', user.name.last);
+
+  // Handle date of birth - month is dropdown, day/year are input fields
+  try {
+    // Parse the date to get month, day, year
+    const dobDate = new Date(user.dob.date);
+    const month = dobDate.getMonth() + 1; // getMonth() returns 0-11
+    const day = dobDate.getDate();
+    const year = dobDate.getFullYear();
+
+    // Month is a dropdown - try to find and select it
+    const monthSelector = 'select[name="month"], select[name="dobMonth"], select[name="birthMonth"]';
+    if (await page.$(monthSelector)) {
+      await page.select(monthSelector, month.toString());
+      console.log(`Selected month: ${month}`);
+    }
+
+    // Day is an input field - try to find and type into it
+    const daySelector = 'input[name="day"], input[name="dobDay"], input[name="birthDay"], input[placeholder*="Day"], input[placeholder*="day"]';
+    if (await page.$(daySelector)) {
+      await page.type(daySelector, day.toString());
+      console.log(`Filled day: ${day}`);
+    }
+
+    // Year is an input field - try to find and type into it
+    const yearSelector = 'input[name="year"], input[name="dobYear"], input[name="birthYear"], input[placeholder*="Year"], input[placeholder*="year"]';
+    if (await page.$(yearSelector)) {
+      await page.type(yearSelector, year.toString());
+      console.log(`Filled year: ${year}`);
+    }
+  } catch (e) {
+    console.log("Date of birth fields not found or error occurred:", e);
+  }
+
+  // Handle state dropdown - the form has a state selector
+  try {
+    // Try multiple possible selectors for state
+    const stateSelectors = [
+      'select[name="state"]',
+      'select[name="province"]',
+      'select[name="region"]',
+      'select[data-testid*="state"]',
+      'select[id*="state"]'
+    ];
+
+    let stateSelector = null;
+    for (const selector of stateSelectors) {
+      if (await page.$(selector)) {
+        stateSelector = selector;
+        console.log(`Found state selector: ${selector}`);
+        break;
+      }
+    }
+
+    if (stateSelector) {
+      // Find the option that contains our state name
+      const stateOptions = await page.$$eval(`${stateSelector} option`, (options: any[]) =>
+        options.map((opt: any) => ({ value: opt.value, text: opt.textContent }))
+      );
+
+      console.log(`Available state options: ${stateOptions.map((opt: any) => opt.text).join(', ')}`);
+
+      // Try to find exact match first, then partial match
+      let selectedValue = null;
+      for (const option of stateOptions) {
+        if (option.text.toLowerCase().includes(user.location.state.toLowerCase()) ||
+          option.value.toLowerCase().includes(user.location.state.toLowerCase())) {
+          selectedValue = option.value;
+          break;
+        }
+      }
+
+      if (selectedValue) {
+        await page.select(stateSelector, selectedValue);
+        console.log(`Selected state: ${user.location.state} with value: ${selectedValue}`);
+      } else {
+        console.log(`Could not find state option for: ${user.location.state}`);
+        console.log(`User state: ${user.location.state}`);
+        console.log(`Available options: ${stateOptions.map((opt: any) => `${opt.text} (${opt.value})`).join(', ')}`);
+      }
+    } else {
+      console.log("No state selector found with any of the attempted selectors");
+    }
+  } catch (e) {
+    console.log("State dropdown not found or error occurred:", e);
+  }
+}
