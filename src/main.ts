@@ -12,7 +12,6 @@ const AFTER_PATH = process.env.SCREENSHOT_AFTER ?? "jackpota-after-fill.png";
 
 async function main() {
   console.log("Starting Puppeteer…");
-
   const browser = await puppeteer.launch({
     headless: HEADLESS, // true for CI
     defaultViewport: { width: 1280, height: 720 },
@@ -20,8 +19,6 @@ async function main() {
 
   try {
     const page = await browser.newPage();
-
-    console.log(`Navigating to ${TARGET_URL}…`);
     await page.goto(TARGET_URL, { waitUntil: "domcontentloaded" });
 
     // Wait for the form (email or any form element is fine as readiness signal)
