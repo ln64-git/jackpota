@@ -24,9 +24,20 @@ async function main() {
     // Build a user
     const user = new User();
     await user.initialize();
+    console.log(user);
 
-    // console.log("Built user:", user);
+    // Example: Wait for a specific type of message (e.g., verification email)
+    // const verificationMessage = await user.waitForMessage("verification", 60000);
+    // if (verificationMessage) {
+    //   console.log("Found verification message:", verificationMessage.subject);
+    // }
+
     await fillRegistrationForm(page, user);
+
+    await user.waitForMessage();
+    if (user.inbox.length > 0) {
+      console.log(user.inbox)
+    }
 
     const afterPath = /\.(png|jpe?g|webp)$/i.test(AFTER_PATH) ? AFTER_PATH : `${AFTER_PATH}.png`;
     await page.screenshot({ path: afterPath as `${string}.png` });

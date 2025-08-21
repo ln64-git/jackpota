@@ -8,7 +8,8 @@ export class User {
     public token: string = "",
     public dob: string = "",
     public location: string = "",
-    public password: string = ""
+    public password: string = "",
+    public inbox: Array<{ id: string; subject: string; from: string; text: string }> = []
   ) { }
 
   public async initialize(): Promise<void> {
@@ -62,8 +63,110 @@ export class User {
     };
   }
 
-  static async fetchTempMailCode(): Promise<string> {
-    return ""
+  public async fetchInboxMessages(): Promise<void> {
+    if (!this.token) {
+      console.log("No token available to fetch inbox messages");
+      return;
+    }
+
+    try {
+      // Fetch messages from the temp mail account
+      const messagesResp = await fetch("https://api.mail.tm/messages", {
+        headers: {
+          "Authorization": `Bearer ${this.token}`,
+          "Content-Type": "application/json"
+        }
+      });
+
+      if (!messagesResp.ok) {
+        throw new Error(`Failed to fetch messages: ${messagesResp.status}`);
+      }
+
+      const messagesData = await messagesResp.json();
+
+      // mail.tm returns messages in hydra:member format
+      const messages = Array.isArray(
+        (messagesData as { ["hydra:member"]?: unknown })["hydra:member"]
+      )
+        ? ((messagesData as { ["hydra:member"]: Array<{ id: string; subject: string; from: { address: string } }> })["hydra:member"])
+        : [];
+
+      // Fetch full content for each message
+      console.log(`Fetching content for ${messages.length} messages...`);
+      const fullMessages = await Promise.all(
+        messages.map(async (msg) => {
+          try {
+            const messageResp = await fetch(`https://api.mail.tm/messages/${msg.id}`, {
+              headers: {
+                "Authorization": `Bearer ${this.token}`,
+                "Content-Type": "application/json"
+              }
+            });
+
+            if (messageResp.ok) {
+              const messageData = await messageResp.json() as { text?: string; html?: string };
+              return {
+                id: msg.id,
+                subject: msg.subject,
+                from: msg.from.address,
+                text: messageData.text || messageData.html || "No content available"
+              };
+            } else {
+              return {
+                id: msg.id,
+                subject: msg.subject,
+                from: msg.from.address,
+                text: "Failed to fetch content"
+              };
+            }
+          } catch (error) {
+            return {
+              id: msg.id,
+              subject: msg.subject,
+              from: msg.from.address,
+              text: "Error fetching content"
+            };
+          }
+        })
+      );
+
+      this.inbox = fullMessages;
+
+    } catch (error) {
+      console.error("Error fetching inbox messages:", error);
+      this.inbox = [];
+    }
+  }
+
+  public async waitForMessage(subjectContains?: string, maxWaitTime: number = 30000): Promise<{ id: string; subject: string; from: string; text: string } | null> {
+    const startTime = Date.now();
+    const checkInterval = 2000; // Check every 2 seconds
+
+    while (Date.now() - startTime < maxWaitTime) {
+      await this.fetchInboxMessages();
+
+      // Look for a message that contains the specified subject
+      if (subjectContains) {
+        const matchingMessage = this.inbox.find(msg =>
+          msg.subject.toLowerCase().includes(subjectContains.toLowerCase())
+        );
+        if (matchingMessage) {
+          return matchingMessage;
+        }
+      } else if (this.inbox.length > 0) {
+        // Return the most recent message if no subject filter
+        const lastMessage = this.inbox[this.inbox.length - 1];
+        if (lastMessage) {
+          return lastMessage;
+        }
+      }
+
+      // Wait before checking again
+      await new Promise(resolve => setTimeout(resolve, checkInterval));
+    }
+
+    console.log(`No message found within ${maxWaitTime}ms`);
+    return null;
   }
 
   static async fetchLocation(): Promise<GeolocationResponse | null> {
