@@ -91,8 +91,6 @@ export class User {
         ? ((messagesData as { ["hydra:member"]: Array<{ id: string; subject: string; from: { address: string } }> })["hydra:member"])
         : [];
 
-      // Fetch full content for each message
-      console.log(`Fetching content for ${messages.length} messages...`);
       const fullMessages = await Promise.all(
         messages.map(async (msg) => {
           try {

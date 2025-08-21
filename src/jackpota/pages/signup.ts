@@ -1,4 +1,28 @@
-import type { User } from "../User/User";
+import { User } from "../User/User";
+import puppeteer, { Page } from "puppeteer";
+
+export async function signUpAndVerify(page: Page): Promise<boolean> {
+  // Build a user
+  const user = new User();
+  await user.initialize();
+  console.log("User ready:", { name: user.name, email: user.email });
+
+  await fillRegistrationForm(page, user);
+
+  const msg = await user.waitForMessage(undefined, 30_000);
+  if (!msg) return console.warn("No verification email within 30s"), false;
+
+  const link = extractVerificationLink(msg.text);
+  if (!link) return console.warn("No verification link found in email"), false;
+
+  const navigated = await navigateToVerificationPage(page, link);
+  if (!navigated) return console.warn("Verification navigation failed"), false;
+
+  const postOk = await completePostVerification(page);
+  if (!postOk) return console.warn("Post-verification failed"), false;
+
+  return true;
+}
 
 export async function fillRegistrationForm(page: any, user: User) {
   await page.type('input[type="email"], input[name="email"]', user.email);
@@ -85,8 +109,6 @@ export async function fillRegistrationForm(page: any, user: User) {
       const termsCheckbox = await page.$('input[type="checkbox"], input[name="terms"], input[name="agreement"]');
       if (termsCheckbox) {
         await termsCheckbox.click();
-      } else {
-        console.log("Terms checkbox not found");
       }
     } catch (e) {
       console.log("Error checking terms checkbox:", e);
@@ -97,11 +119,8 @@ export async function fillRegistrationForm(page: any, user: User) {
 
   // Submit the form
   try {
-    console.log("Looking for submit button...");
     const submitButton = await page.$('button[data-testid="button-base"][type="submit"]');
-
     if (submitButton) {
-      console.log("Found submit button, checking if it's enabled...");
 
       // Wait for the button to become enabled (max 10 seconds)
       let attempts = 0;
@@ -109,31 +128,19 @@ export async function fillRegistrationForm(page: any, user: User) {
 
       while (attempts < maxAttempts) {
         const isDisabled = await page.evaluate((btn: any) => btn.disabled, submitButton);
-
         if (!isDisabled) {
-          console.log("Button is now enabled, attempting to click...");
           break;
         }
-
-        console.log(`Button still disabled, waiting... (attempt ${attempts + 1}/${maxAttempts})`);
         await new Promise(resolve => setTimeout(resolve, 500));
         attempts++;
       }
 
-      if (attempts >= maxAttempts) {
-        console.log("Button remained disabled after 10 seconds, trying to click anyway...");
-      }
-
       // Click the button
       await submitButton.click();
-      console.log("Submit button clicked successfully!");
 
       // Wait for form submission to process
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      console.log("Form submission completed!");
-    } else {
-      console.log("Submit button not found");
     }
   } catch (e) {
     console.log("Error submitting form:", e);
@@ -143,9 +150,6 @@ export async function fillRegistrationForm(page: any, user: User) {
 
 // Function to extract verification link from email content
 export function extractVerificationLink(emailContent: string): string | null {
-  console.log("Extracting verification link from email content...");
-  console.log("Email content length:", emailContent.length);
-
   // Common patterns for verification links
   const linkPatterns = [
     /https?:\/\/[^\s<>"']*verify[^\s<>"']*/i,
@@ -162,7 +166,6 @@ export function extractVerificationLink(emailContent: string): string | null {
   for (const pattern of linkPatterns) {
     const match = emailContent.match(pattern);
     if (match) {
-      console.log("Found verification link with pattern:", pattern.source);
       return match[0];
     }
   }
@@ -170,14 +173,10 @@ export function extractVerificationLink(emailContent: string): string | null {
   // If no specific pattern found, look for any URL that might be a verification link
   const urlPattern = /https?:\/\/[^\s<>"']+/g;
   const urls = emailContent.match(urlPattern);
-
   if (urls && urls.length > 0) {
-    console.log("Found URLs in email:", urls);
     // Return the first URL found (often the verification link is the main link in the email)
     return urls[0];
   }
-
-  console.log("No URLs found in email content");
   return null;
 }
 
@@ -188,45 +187,30 @@ export async function navigateToVerificationPage(page: any, verificationLink: st
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      console.log(`Navigation attempt ${attempt}/${maxAttempts}...`);
-
       const response = await page.goto(verificationLink, {
         waitUntil: "domcontentloaded",
         timeout: 30000
       });
-
       if (response && response.ok()) {
-        console.log("Successfully navigated to verification page");
-
         // Wait for page to fully load and take screenshot
         await new Promise(resolve => setTimeout(resolve, 3000));
-        await page.screenshot({ path: "jackpota-verification-page.png" });
-        console.log("Verification page screenshot saved");
-
         return true;
       } else {
         console.log(`Navigation failed with status: ${response?.status()}`);
       }
-
     } catch (error) {
-      console.log(`Navigation attempt ${attempt} failed:`, error);
-
       if (attempt < maxAttempts) {
-        console.log(`Waiting ${retryDelay / 1000} seconds before retry...`);
         await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
     }
   }
-
-  console.log("Failed to navigate to verification page after all attempts");
+  console.log("Failed to navigate to verification page after maxAttempts");
   return false;
 }
 
 // Function to complete post-verification steps
 export async function completePostVerification(page: any): Promise<boolean> {
   try {
-    console.log("Completing post-verification steps...");
-
     // Wait for page to stabilize
     await new Promise(resolve => setTimeout(resolve, 2000));
 
@@ -236,7 +220,6 @@ export async function completePostVerification(page: any): Promise<boolean> {
       const isChecked = await page.evaluate((cb: any) => cb.checked, checkbox);
       if (!isChecked) {
         await checkbox.click();
-        console.log("Terms checkbox clicked");
       }
     }
 
@@ -254,45 +237,29 @@ export async function completePostVerification(page: any): Promise<boolean> {
 
       if (buttonText.toLowerCase().includes('start winning now')) {
         submitButton = allButtons[i];
-        console.log(`Found 'Start Winning Now' button`);
         break;
       }
     }
 
     if (submitButton) {
       await submitButton.click();
-      console.log("'Start Winning Now' button clicked");
-
       // Step 1: Handle the first popup (close it)
-      console.log("Step 1: Handling first popup (closing it)...");
       const firstPopupClosed = await handleFirstPopup(page);
-
       if (!firstPopupClosed) {
         console.log("Failed to close first popup");
         return false;
       }
-
       // Step 2: Handle the second popup (click "Claim My Rewards")
-      console.log("Step 2: Handling second popup (clicking 'Claim My Rewards')...");
       const secondPopupHandled = await handleSecondPopup(page);
-
       if (!secondPopupHandled) {
         console.log("Failed to handle second popup");
         return false;
       }
 
-      // Wait and take final screenshot
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      await page.screenshot({ path: "jackpota-final-state.png" });
-      console.log("Final state screenshot saved");
-
       return true;
-
     } else {
-      console.log("'Start Winning Now' button not found");
       return false;
     }
-
   } catch (error) {
     console.log("Error completing post-verification steps:", error);
     return false;
@@ -308,16 +275,11 @@ export async function handleFirstPopup(page: any): Promise<boolean> {
   const waitInterval = 500;
 
   for (let attempt = 1; attempt <= maxWaitAttempts; attempt++) {
-    console.log(`Waiting for first modal to appear (attempt ${attempt}/${maxWaitAttempts})...`);
-
     // Wait a bit before checking
     await new Promise(resolve => setTimeout(resolve, waitInterval));
-
     // Try to find a close button for the first popup
     closeButton = await findCloseButtonForFirstPopup(page);
-
     if (closeButton) {
-      console.log("First modal and close button found!");
       modalFound = true;
       break;
     }
@@ -326,16 +288,12 @@ export async function handleFirstPopup(page: any): Promise<boolean> {
   if (modalFound && closeButton) {
     // Try to click the close button with retry logic
     const clickSuccess = await clickButtonWithRetry(page, closeButton, "first popup close button");
-
     if (clickSuccess) {
-      console.log("Successfully closed the first popup!");
       return true;
     } else {
-      console.log("Failed to close first popup after multiple attempts");
       return false;
     }
   } else {
-    console.log("First modal or close button not found after waiting");
     return false;
   }
 }
@@ -349,16 +307,11 @@ export async function handleSecondPopup(page: any): Promise<boolean> {
   const waitInterval = 500;
 
   for (let attempt = 1; attempt <= maxWaitAttempts; attempt++) {
-    console.log(`Waiting for second modal to appear (attempt ${attempt}/${maxWaitAttempts})...`);
-
     // Wait a bit before checking
     await new Promise(resolve => setTimeout(resolve, waitInterval));
-
     // Try to find the "Claim My Rewards" button
     claimButton = await findClaimRewardsButton(page);
-
     if (claimButton) {
-      console.log("Second modal and 'Claim My Rewards' button found!");
       modalFound = true;
       break;
     }
@@ -367,16 +320,12 @@ export async function handleSecondPopup(page: any): Promise<boolean> {
   if (modalFound && claimButton) {
     // Try to click the claim button with retry logic
     const clickSuccess = await clickButtonWithRetry(page, claimButton, "'Claim My Rewards' button");
-
     if (clickSuccess) {
-      console.log("Successfully clicked 'Claim My Rewards' button!");
       return true;
     } else {
-      console.log("Failed to click 'Claim My Rewards' button after multiple attempts");
       return false;
     }
   } else {
-    console.log("Second modal or 'Claim My Rewards' button not found after waiting");
     return false;
   }
 }
@@ -396,7 +345,6 @@ export async function findCloseButtonForFirstPopup(page: any): Promise<any> {
       buttonText.toLowerCase().includes('close') ||
       buttonText.toLowerCase().includes('get coins') ||
       buttonText === '×' || buttonText === 'X' || buttonText === '✕') {
-      console.log(`Found first popup close button with text: "${buttonText}"`);
       return allButtons[i];
     }
   }
@@ -404,14 +352,12 @@ export async function findCloseButtonForFirstPopup(page: any): Promise<any> {
   // Strategy 2: Look for close buttons with aria-labels
   const closeButton = await page.$('button[aria-label*="close"], button[aria-label*="Close"], button[aria-label*="Close modal"]');
   if (closeButton) {
-    console.log("Found first popup close button with aria-label");
     return closeButton;
   }
 
   // Strategy 3: Look for buttons with specific classes
   const classButton = await page.$('.close-button, .modal-close, .btn-close, .close');
   if (classButton) {
-    console.log("Found first popup close button with class selector");
     return classButton;
   }
 
@@ -431,7 +377,6 @@ export async function findClaimRewardsButton(page: any): Promise<any> {
       buttonText.toLowerCase().includes('claim rewards') ||
       buttonText.toLowerCase().includes('claim') ||
       buttonText.toLowerCase().includes('get rewards')) {
-      console.log(`Found 'Claim My Rewards' button with text: "${buttonText}"`);
       return allButtons[i];
     }
   }
@@ -445,7 +390,6 @@ export async function clickButtonWithRetry(page: any, button: any, buttonDescrip
 
   for (let attempt = 1; attempt <= maxClickAttempts; attempt++) {
     try {
-      console.log(`Attempting to click ${buttonDescription} (attempt ${attempt}/${maxClickAttempts})...`);
 
       // Check if button is visible and clickable
       const isVisible = await page.evaluate((btn: any) => {
@@ -454,7 +398,6 @@ export async function clickButtonWithRetry(page: any, button: any, buttonDescrip
       }, button);
 
       if (!isVisible) {
-        console.log("Button is not visible, waiting...");
         await new Promise(resolve => setTimeout(resolve, 500));
         continue;
       }
@@ -476,7 +419,6 @@ export async function clickButtonWithRetry(page: any, button: any, buttonDescrip
 
       // Click the button
       await button.click();
-      console.log("Button clicked successfully!");
 
       // Wait to see if the modal closes or action completes
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -489,20 +431,14 @@ export async function clickButtonWithRetry(page: any, button: any, buttonDescrip
         }, button);
 
         if (!buttonStillVisible) {
-          console.log("First popup appears to have closed successfully");
           return true;
         }
-
-        console.log("First popup still visible after click, trying again...");
       } else {
-        // For the claim button, assume success if no error
-        console.log("Claim button clicked successfully");
         return true;
       }
 
     } catch (error) {
       console.log(`Click attempt ${attempt} failed:`, error);
-
       if (attempt < maxClickAttempts) {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
