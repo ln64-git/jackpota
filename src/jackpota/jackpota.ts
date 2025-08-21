@@ -4,10 +4,7 @@ export async function fillRegistrationForm(page: any, user: User) {
   await page.type('input[type="email"], input[name="email"]', user.email);
   await page.type('input[type="password"], input[name="password"]', user.password);
 
-  // Fill name fields
-  const nameParts = user.name.split(' ');
-  const firstName = nameParts[0] || '';
-  const lastName = nameParts.slice(1).join(' ') || ''; // Handles multiple last names
+  const [firstName = '', lastName = ''] = user.name.split(' ');
   await page.type('input[name="firstName"], input[name="first_name"], input[name="firstname"]', firstName);
   await page.type('input[name="lastName"], input[name="last_name"], input[name="lastname"]', lastName);
 

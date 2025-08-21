@@ -25,8 +25,9 @@ async function main() {
 
     // Build a user
     const user = new User();
-    console.log("Built user:", user);
-
+    await user.initialize();
+    
+    // console.log("Built user:", user);
     await fillRegistrationForm(page, user);
 
     console.log("Taking screenshot after fill…");

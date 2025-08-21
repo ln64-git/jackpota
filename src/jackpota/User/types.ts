@@ -12,3 +12,9 @@ export interface GeolocationResponse {
   lat?: number;
   lon?: number;
 }
+
+export interface RandomUserResponse {
+  name: { first: string; last: string };
+  email: string;
+  dob: { date: string; age: number };
+}
