@@ -83,6 +83,61 @@ async function navigateToVerificationPage(page: any, verificationLink: string): 
   return false;
 }
 
+// Function to complete post-verification steps
+async function completePostVerification(page: any): Promise<boolean> {
+  try {
+    console.log("Completing post-verification steps...");
+
+    // Wait for page to stabilize
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    // Click the terms checkbox
+    const checkbox = await page.$('input[type="checkbox"]');
+    if (checkbox) {
+      const isChecked = await page.evaluate((cb: any) => cb.checked, checkbox);
+      if (!isChecked) {
+        await checkbox.click();
+        console.log("Terms checkbox clicked");
+      }
+    }
+
+    // Find and click the "Start Winning Now" button
+    const allButtons = await page.$$('button');
+    let submitButton = null;
+
+    for (let i = 0; i < allButtons.length; i++) {
+      const buttonText = await page.evaluate((btn: any) =>
+        btn.textContent || 'No text', allButtons[i]
+      );
+
+      if (buttonText.toLowerCase().includes('start winning now')) {
+        submitButton = allButtons[i];
+        console.log(`Found 'Start Winning Now' button`);
+        break;
+      }
+    }
+
+    if (submitButton) {
+      await submitButton.click();
+      console.log("'Start Winning Now' button clicked");
+
+      // Wait and take final screenshot
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      await page.screenshot({ path: "jackpota-final-state.png" });
+      console.log("Final state screenshot saved");
+
+      return true;
+    } else {
+      console.log("'Start Winning Now' button not found");
+      return false;
+    }
+
+  } catch (error) {
+    console.log("Error completing post-verification steps:", error);
+    return false;
+  }
+}
+
 const TARGET_URL = process.env.TARGET_URL ?? "https://www.jackpota.com/register";
 const HEADLESS = (process.env.HEADLESS ?? "false").toLowerCase() === "true";
 const BEFORE_PATH = process.env.SCREENSHOT_BEFORE ?? "jackpota-before-fill.png";
@@ -138,6 +193,16 @@ async function main() {
 
     if (navigationSuccess) {
       console.log("Email verification process completed successfully!");
+
+      // Complete the post-verification steps
+      console.log("Completing post-verification steps...");
+      const postVerificationSuccess = await completePostVerification(page);
+
+      if (postVerificationSuccess) {
+        console.log("Post-verification steps completed successfully!");
+      } else {
+        console.log("Failed to complete post-verification steps");
+      }
     } else {
       console.log("Failed to complete email verification");
     }
