@@ -89,7 +89,7 @@ async function completePostVerification(page: any): Promise<boolean> {
     console.log("Completing post-verification steps...");
 
     // Wait for page to stabilize
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Click the terms checkbox
     const checkbox = await page.$('input[type="checkbox"]');
@@ -99,6 +99,35 @@ async function completePostVerification(page: any): Promise<boolean> {
         await checkbox.click();
         console.log("Terms checkbox clicked");
       }
+    }
+
+    // Check if there's a notification modal with "No, Thanks" button and dismiss it first
+    console.log("Checking for notification modal...");
+    const notificationButtons = await page.$$('button');
+    let notificationDeclineButton = null;
+
+    for (let i = 0; i < notificationButtons.length; i++) {
+      const buttonText = await page.evaluate((btn: any) =>
+        btn.textContent?.trim() || '', notificationButtons[i]
+      );
+
+      if (buttonText.toLowerCase().includes('no, thanks') ||
+        buttonText.toLowerCase().includes('no thanks')) {
+        notificationDeclineButton = notificationButtons[i];
+        console.log(`Found notification modal "No, Thanks" button: "${buttonText}"`);
+        break;
+      }
+    }
+
+    if (notificationDeclineButton) {
+      console.log("Dismissing notification modal...");
+      await notificationDeclineButton.click();
+      console.log("Notification modal dismissed");
+
+      // Wait for the modal to close
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    } else {
+      console.log("No notification modal found");
     }
 
     // Find and click the "Start Winning Now" button
@@ -121,8 +150,81 @@ async function completePostVerification(page: any): Promise<boolean> {
       await submitButton.click();
       console.log("'Start Winning Now' button clicked");
 
+      // Wait for the decline button to appear
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Look for and click the "No, Thanks" button
+      try {
+        // Wait for the modal to appear and then look for the close button
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Try multiple selectors to find the "No, Thanks" button
+        let declineButton = null;
+
+        // First try looking for any button with "No, Thanks" text (this is the notification modal)
+        const allButtons = await page.$$('button');
+        for (let i = 0; i < allButtons.length; i++) {
+          const buttonText = await page.evaluate((btn: any) =>
+            btn.textContent?.trim() || '', allButtons[i]
+          );
+
+          if (buttonText.toLowerCase().includes('no, thanks') ||
+            buttonText.toLowerCase().includes('no thanks') ||
+            buttonText.toLowerCase().includes('decline')) {
+            declineButton = allButtons[i];
+            console.log(`Found "No, Thanks" button with text: "${buttonText}"`);
+            break;
+          }
+        }
+
+        // If not found, try looking for any close button or X button
+        if (!declineButton) {
+          declineButton = await page.$('button[aria-label*="close"], button[aria-label*="Close"], .close-button, .modal-close, [data-test*="close"]');
+          if (declineButton) {
+            console.log("Found close button with aria-label or class selector");
+          }
+        }
+
+        // If still not found, try the data-test selector as last resort
+        if (!declineButton) {
+          declineButton = await page.$('[data-test="close-modal-button"]');
+          if (declineButton) {
+            console.log("Found button with data-test selector");
+          }
+        }
+
+        if (declineButton) {
+          // Check if button is disabled and try to enable it
+          const isDisabled = await page.evaluate((btn: any) => {
+            return btn.disabled || btn.getAttribute('aria-disabled') === 'true' ||
+              btn.classList.contains('disabled') || btn.style.pointerEvents === 'none';
+          }, declineButton);
+
+          if (isDisabled) {
+            console.log("Button appears disabled, enabling it...");
+            await page.evaluate((btn: any) => {
+              btn.disabled = false;
+              btn.removeAttribute('aria-disabled');
+              btn.classList.remove('disabled');
+              btn.style.pointerEvents = 'auto';
+            }, declineButton);
+          }
+
+          // Click the button
+          await declineButton.click();
+          console.log("'No, Thanks' button clicked successfully");
+
+          // Wait for modal to close
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } else {
+          console.log("'No, Thanks' button not found");
+        }
+      } catch (error) {
+        console.log("Error clicking decline button:", error);
+      }
+
       // Wait and take final screenshot
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 1000));
       await page.screenshot({ path: "jackpota-final-state.png" });
       console.log("Final state screenshot saved");
 
