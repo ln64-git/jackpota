@@ -18,21 +18,18 @@ export async function fillRegistrationForm(page: any, user: User) {
     const monthSelector = 'select[name="month"], select[name="dobMonth"], select[name="birthMonth"]';
     if (await page.$(monthSelector)) {
       await page.select(monthSelector, month.toString());
-      console.log(`Selected month: ${month}`);
     }
 
     // Day is an input field - try to find and type into it
     const daySelector = 'input[name="day"], input[name="dobDay"], input[name="birthDay"], input[placeholder*="Day"], input[placeholder*="day"]';
     if (await page.$(daySelector)) {
       await page.type(daySelector, day.toString());
-      console.log(`Filled day: ${day}`);
     }
 
     // Year is an input field - try to find and type into it
     const yearSelector = 'input[name="year"], input[name="dobYear"], input[name="birthYear"], input[placeholder*="Year"], input[placeholder*="year"]';
     if (await page.$(yearSelector)) {
       await page.type(yearSelector, year.toString());
-      console.log(`Filled year: ${year}`);
     }
   } catch (e) {
     console.log("Date of birth fields not found or error occurred:", e);
@@ -53,7 +50,6 @@ export async function fillRegistrationForm(page: any, user: User) {
     for (const selector of stateSelectors) {
       if (await page.$(selector)) {
         stateSelector = selector;
-        console.log(`Found state selector: ${selector}`);
         break;
       }
     }
@@ -63,8 +59,6 @@ export async function fillRegistrationForm(page: any, user: User) {
       const stateOptions = await page.$$eval(`${stateSelector} option`, (options: any[]) =>
         options.map((opt: any) => ({ value: opt.value, text: opt.textContent }))
       );
-
-      console.log(`Available state options: ${stateOptions.map((opt: any) => opt.text).join(', ')}`);
 
       // Try to find exact match first, then partial match
       let selectedValue = null;
@@ -78,7 +72,6 @@ export async function fillRegistrationForm(page: any, user: User) {
 
       if (selectedValue) {
         await page.select(stateSelector, selectedValue);
-        console.log(`Selected state: ${user.location} with value: ${selectedValue}`);
       } else {
         console.log(`Could not find state option for: ${user.location}`);
         console.log(`User state: ${user.location}`);
@@ -92,7 +85,6 @@ export async function fillRegistrationForm(page: any, user: User) {
       const termsCheckbox = await page.$('input[type="checkbox"], input[name="terms"], input[name="agreement"]');
       if (termsCheckbox) {
         await termsCheckbox.click();
-        console.log("Checked terms and conditions checkbox");
       } else {
         console.log("Terms checkbox not found");
       }
