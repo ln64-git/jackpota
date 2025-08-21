@@ -94,4 +94,48 @@ export async function fillRegistrationForm(page: any, user: User) {
   } catch (e) {
     console.log("State dropdown not found or error occurred:", e);
   }
+
+  // Submit the form
+  try {
+    console.log("Looking for submit button...");
+    const submitButton = await page.$('button[data-testid="button-base"][type="submit"]');
+
+    if (submitButton) {
+      console.log("Found submit button, checking if it's enabled...");
+
+      // Wait for the button to become enabled (max 10 seconds)
+      let attempts = 0;
+      const maxAttempts = 20; // 20 attempts * 500ms = 10 seconds
+
+      while (attempts < maxAttempts) {
+        const isDisabled = await page.evaluate((btn: any) => btn.disabled, submitButton);
+
+        if (!isDisabled) {
+          console.log("Button is now enabled, attempting to click...");
+          break;
+        }
+
+        console.log(`Button still disabled, waiting... (attempt ${attempts + 1}/${maxAttempts})`);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        attempts++;
+      }
+
+      if (attempts >= maxAttempts) {
+        console.log("Button remained disabled after 10 seconds, trying to click anyway...");
+      }
+
+      // Click the button
+      await submitButton.click();
+      console.log("Submit button clicked successfully!");
+
+      // Wait for form submission to process
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      console.log("Form submission completed!");
+    } else {
+      console.log("Submit button not found");
+    }
+  } catch (e) {
+    console.log("Error submitting form:", e);
+  }
 }
