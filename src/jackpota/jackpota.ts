@@ -87,6 +87,18 @@ export async function fillRegistrationForm(page: any, user: User) {
     } else {
       console.log("No state selector found with any of the attempted selectors");
     }
+
+    try {
+      const termsCheckbox = await page.$('input[type="checkbox"], input[name="terms"], input[name="agreement"]');
+      if (termsCheckbox) {
+        await termsCheckbox.click();
+        console.log("Checked terms and conditions checkbox");
+      } else {
+        console.log("Terms checkbox not found");
+      }
+    } catch (e) {
+      console.log("Error checking terms checkbox:", e);
+    }
   } catch (e) {
     console.log("State dropdown not found or error occurred:", e);
   }
