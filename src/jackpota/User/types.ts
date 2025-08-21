@@ -1,9 +1,9 @@
-export interface User {
-  name: { first: string; last: string };
-  email: string;
-  dob: string;
-  location: string;
-}
+// export interface User {
+//   name: { first: string; last: string };
+//   email: string;
+//   dob: string;
+//   location: string;
+// }
 
 export interface GeolocationResponse {
   country: string;

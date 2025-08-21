@@ -1,22 +1,17 @@
-import type { User } from "./User/types";
+import type { User } from "./User/User";
 
 export async function fillRegistrationForm(page: any, user: User) {
-  // Fill email field
   await page.type('input[type="email"], input[name="email"]', user.email);
+  await page.type('input[type="password"], input[name="password"]', user.password);
 
-  // Fill password field (generate a random password since it's not in user data)
-  const password = "Password123!";
-  await page.type('input[type="password"], input[name="password"]', password);
+  // Fill name fields
+  const nameParts = user.name.split(' ');
+  const firstName = nameParts[0] || '';
+  const lastName = nameParts.slice(1).join(' ') || ''; // Handles multiple last names
+  await page.type('input[name="firstName"], input[name="first_name"], input[name="firstname"]', firstName);
+  await page.type('input[name="lastName"], input[name="last_name"], input[name="lastname"]', lastName);
 
-  // Fill first name field
-  await page.type('input[name="firstName"], input[name="first_name"], input[name="firstname"]', user.name.first);
-
-  // Fill last name field
-  await page.type('input[name="lastName"], input[name="last_name"], input[name="lastname"]', user.name.last);
-
-  // Handle date of birth - month is dropdown, day/year are input fields
   try {
-    // Parse the date to get month, day, year
     const dobDate = new Date(user.dob);
     const month = dobDate.getMonth() + 1; // getMonth() returns 0-11
     const day = dobDate.getDate();

@@ -1,26 +1,25 @@
 // src/user/User.ts
-import type { GeolocationResponse, User } from "./types";
+import type { GeolocationResponse, } from "./types";
 
-export class JackpotaUser implements User {
+export class User {
   constructor(
-    public name: { first: string; last: string } = { first: "", last: "" },
+    public name: string = "",
     public email: string = "",
     public dob: string = "",
-    public location: string = ""
-  ) { }
-
-  static async create(seed?: Partial<JackpotaUser>): Promise<JackpotaUser> {
-    const location = await JackpotaUser.fetchLocation();
-    const user = await JackpotaUser.fetchUser();
-    if (!user) throw new Error("No user data returned from API");
-    const dob = new Date(user.dob);
-    dob.setFullYear(dob.getFullYear() + 21);
-    return new JackpotaUser(
-      user.name,
-      user.email ?? "user@example.com",
-      user.dob,
-      location?.region || "NY"
-    );
+    public location: string = "",
+    public password: string = ""
+  ) {
+    this.initializer();
+  }
+  private async initializer(): Promise<void> {
+    const location = await User.fetchLocation();
+    const genUser = await User.fetchUser();
+    if (!genUser) throw new Error("No user data returned from API");
+    this.name = genUser.name;
+    this.email = genUser.email ?? "user@example.com";
+    this.dob = genUser.dob;
+    this.location = location?.region || "NY";
+    this.password = "Password123!";
   }
 
   static async fetchLocation(): Promise<GeolocationResponse | null> {
