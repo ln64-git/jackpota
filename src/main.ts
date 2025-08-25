@@ -1,5 +1,6 @@
 import { signUpAndVerify } from "./jackpota/pages/signup";
 import puppeteer, { Page } from "puppeteer";
+import { playSpinAWin } from "./jackpota/pages/spin-a-win";
 
 const headless = false
 let page: Page | null = null;
@@ -17,8 +18,11 @@ async function main() {
       timeout: 10_000,
     });
 
-    const ok = await signUpAndVerify(page);
-    console.log(ok ? "✅ Flow completed" : "❌ Flow aborted");
+    // 1. Sign up and verify
+    await signUpAndVerify(page);
+
+    // Uncomment and implement playSpinAWinGame if needed
+    await playSpinAWin(page);
 
     await page.screenshot({ path: "jackpota-after.png" });
   } catch (err) {

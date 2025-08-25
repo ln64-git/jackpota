@@ -46,19 +46,33 @@ export class User {
         password: "someStrongPassword"
       })
     });
-    const account = await accountResp.json();
+    
+    if (!accountResp.ok) {
+      throw new Error(`Failed to create account: ${accountResp.status}`);
+    }
+    
+    const account = await accountResp.json() as { address: string };
+    
+    if (!account || !account.address) {
+      throw new Error("Failed to create account: Invalid response");
+    }
 
     // 3. Get token
     const tokenResp = await fetch("https://api.mail.tm/token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address: (account as { address: string }).address, password: "someStrongPassword" })
+      body: JSON.stringify({ address: account.address, password: "someStrongPassword" })
     });
+    
+    if (!tokenResp.ok) {
+      throw new Error(`Failed to get token: ${tokenResp.status}`);
+    }
+    
     const tokenData: unknown = await tokenResp.json();
     const token = (tokenData as { token?: string }).token;
 
     return {
-      email: (account as { address: string }).address,
+      email: account.address,
       token: token || ""
     };
   }

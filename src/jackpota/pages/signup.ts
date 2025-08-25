@@ -1,5 +1,5 @@
 import { User } from "../User/User";
-import puppeteer, { Page } from "puppeteer";
+import { Page } from "puppeteer";
 
 export async function signUpAndVerify(page: Page): Promise<boolean> {
   // Build a user
@@ -146,7 +146,6 @@ export async function fillRegistrationForm(page: any, user: User) {
     console.log("Error submitting form:", e);
   }
 }
-
 
 // Function to extract verification link from email content
 export function extractVerificationLink(emailContent: string): string | null {
