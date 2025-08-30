@@ -195,7 +195,7 @@ export async function fillRegistrationForm(page: any, user: User): Promise<strin
 
         // Wait for form submission to process
         await new Promise(resolve => setTimeout(resolve, 3000));
-        
+
         // Take a screenshot to see what the page looks like after form submission
         try {
           await page.screenshot({ path: "after-form-submission.png" });
@@ -203,82 +203,79 @@ export async function fillRegistrationForm(page: any, user: User): Promise<strin
         } catch (e) {
           console.log("Could not take screenshot:", e);
         }
-        
+
         // Check if the "Play Now" button appears immediately after form submission
         const playNowButton = await findPlayNowButton(page);
         if (playNowButton) {
           console.log("Found 'Play Now' button immediately after form submission!");
           await playNowButton.click();
           console.log("Clicked 'Play Now' button successfully!");
-          
+
           // Wait for any popups or modals to appear
           await new Promise(resolve => setTimeout(resolve, 3000));
-          
+
           // Handle any popups that might appear
           const firstPopupClosed = await handleFirstPopup(page);
           if (firstPopupClosed) {
             console.log("First popup handled successfully");
           }
-          
+
           const secondPopupHandled = await handleSecondPopup(page);
           if (secondPopupHandled) {
             console.log("Second popup handled successfully");
           }
-          
+
           return "completed"; // Special return value to indicate completion
         } else {
           console.log("No 'Play Now' button found immediately after form submission, continuing with email verification flow...");
           return "form_filled"; // Indicate form was filled but button not found
         }
       } else {
-        // If no submit button found, try pressing Enter on the form
-        console.log("No submit button found, trying to press Enter on the form...");
-        
-        // Find the form and press Enter
-        const form = await page.$('form');
-        if (form) {
-          await form.press('Enter');
-          console.log("Pressed Enter on form");
-          
-          // Wait for form submission to process
-          await new Promise(resolve => setTimeout(resolve, 3000));
-          
-          // Take a screenshot to see what the page looks like after form submission
+        // If no submit button found, try to find and click the "Play Now" button directly
+        console.log("No submit button found, looking for 'Play Now' button directly...");
+
+        // Wait a moment for the page to stabilize
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Take a screenshot to see the current state
+        try {
+          await page.screenshot({ path: "looking-for-play-now.png" });
+          console.log("Screenshot saved as looking-for-play-now.png");
+        } catch (e) {
+          console.log("Could not take screenshot:", e);
+        }
+
+        // Try to find the "Play Now" button with a simple approach
+        const allButtons = await page.$$('button');
+        console.log(`Found ${allButtons.length} buttons on the page`);
+
+        let playNowButton = null;
+        for (let i = 0; i < allButtons.length; i++) {
           try {
-            await page.screenshot({ path: "after-enter-press.png" });
-            console.log("Screenshot saved as after-enter-press.png");
+            const buttonText = await page.evaluate((btn: any) => btn.textContent?.trim() || '', allButtons[i]);
+            console.log(`Button ${i}: "${buttonText}"`);
+
+            if (buttonText.toLowerCase() === 'play now') {
+              console.log(`Found 'Play Now' button at index ${i}!`);
+              playNowButton = allButtons[i];
+              break;
+            }
           } catch (e) {
-            console.log("Could not take screenshot:", e);
+            console.log(`Error reading button ${i}:`, e);
           }
-          
-          // Check if the "Play Now" button appears after pressing Enter
-          const playNowButton = await findPlayNowButton(page);
-          if (playNowButton) {
-            console.log("Found 'Play Now' button after pressing Enter!");
-            await playNowButton.click();
-            console.log("Clicked 'Play Now' button successfully!");
-            
-            // Wait for any popups or modals to appear
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            
-            // Handle any popups that might appear
-            const firstPopupClosed = await handleFirstPopup(page);
-            if (firstPopupClosed) {
-              console.log("First popup handled successfully");
-            }
-            
-            const secondPopupHandled = await handleSecondPopup(page);
-            if (secondPopupHandled) {
-              console.log("Second popup handled successfully");
-            }
-            
-            return "completed"; // Special return value to indicate completion
-          } else {
-            console.log("No 'Play Now' button found after pressing Enter, continuing with email verification flow...");
-            return "form_filled"; // Indicate form was filled but button not found
-          }
+        }
+
+        if (playNowButton) {
+          console.log("Clicking 'Play Now' button...");
+          await playNowButton.click();
+          console.log("Successfully clicked 'Play Now' button!");
+
+          // Wait for any navigation or popups
+          await new Promise(resolve => setTimeout(resolve, 3000));
+
+          return "completed";
         } else {
-          console.log("No form found to press Enter on");
+          console.log("No 'Play Now' button found, continuing with email verification flow...");
           return "form_filled";
         }
       }
