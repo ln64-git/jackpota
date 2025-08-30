@@ -7,16 +7,69 @@ export async function signUpAndVerify(page: Page): Promise<boolean> {
   await user.initialize();
   console.log("User ready:", { name: user.name, email: user.email });
 
-  await fillRegistrationForm(page, user);
+  const formResult = await fillRegistrationForm(page, user);
+  if (formResult === "error") {
+    console.warn("Failed to fill registration form");
+    return false;
+  }
 
-  const msg = await user.waitForMessage(undefined, 30_000);
-  if (!msg) return console.warn("No verification email within 30s"), false;
+  // Check if we already completed the process by clicking "Play Now" immediately
+  if (formResult === "completed") {
+    console.log("Registration and 'Play Now' button click completed successfully!");
+    return true;
+  }
+
+  console.log("Registration form filled successfully, waiting for verification email...");
+
+  // Wait for verification email with longer timeout
+  const msg = await user.waitForMessage(undefined, 60_000); // Increased to 60 seconds
+
+  if (!msg) {
+    console.warn("No verification email within 60s - website may have changed");
+    console.log("Attempting to continue without email verification...");
+
+    // Try to find and click the "Start Winning Now" button directly
+    const postOk = await completePostVerification(page);
+    if (postOk) {
+      console.log("Successfully completed post-verification without email");
+      return true;
+    } else {
+      console.warn("Failed to complete post-verification without email");
+      return false;
+    }
+  }
 
   const link = extractVerificationLink(msg.text);
-  if (!link) return console.warn("No verification link found in email"), false;
+  if (!link) {
+    console.warn("No verification link found in email");
+    console.log("Attempting to continue without verification link...");
+
+    // Try to find and click the "Start Winning Now" button directly
+    const postOk = await completePostVerification(page);
+    if (postOk) {
+      console.log("Successfully completed post-verification without verification link");
+      return true;
+    } else {
+      console.warn("Failed to complete post-verification without verification link");
+      return false;
+    }
+  }
 
   const navigated = await navigateToVerificationPage(page, link);
-  if (!navigated) return console.warn("Verification navigation failed"), false;
+  if (!navigated) {
+    console.warn("Verification navigation failed");
+    console.log("Attempting to continue without verification navigation...");
+
+    // Try to find and click the "Start Winning Now" button directly
+    const postOk = await completePostVerification(page);
+    if (postOk) {
+      console.log("Successfully completed post-verification without navigation");
+      return true;
+    } else {
+      console.warn("Failed to complete post-verification without navigation");
+      return false;
+    }
+  }
 
   const postOk = await completePostVerification(page);
   if (!postOk) return console.warn("Post-verification failed"), false;
@@ -24,126 +77,220 @@ export async function signUpAndVerify(page: Page): Promise<boolean> {
   return true;
 }
 
-export async function fillRegistrationForm(page: any, user: User) {
-  await page.type('input[type="email"], input[name="email"]', user.email);
-  await page.type('input[type="password"], input[name="password"]', user.password);
-
-  const [firstName = '', lastName = ''] = user.name.split(' ');
-  await page.type('input[name="firstName"], input[name="first_name"], input[name="firstname"]', firstName);
-  await page.type('input[name="lastName"], input[name="last_name"], input[name="lastname"]', lastName);
-
+export async function fillRegistrationForm(page: any, user: User): Promise<string> {
   try {
-    const dobDate = new Date(user.dob);
-    const month = dobDate.getMonth() + 1; // getMonth() returns 0-11
-    const day = dobDate.getDate();
-    const year = dobDate.getFullYear();
+    await page.type('input[type="email"], input[name="email"]', user.email);
+    await page.type('input[type="password"], input[name="password"]', user.password);
 
-    // Month is a dropdown - try to find and select it
-    const monthSelector = 'select[name="month"], select[name="dobMonth"], select[name="birthMonth"]';
-    if (await page.$(monthSelector)) {
-      await page.select(monthSelector, month.toString());
-    }
-
-    // Day is an input field - try to find and type into it
-    const daySelector = 'input[name="day"], input[name="dobDay"], input[name="birthDay"], input[placeholder*="Day"], input[placeholder*="day"]';
-    if (await page.$(daySelector)) {
-      await page.type(daySelector, day.toString());
-    }
-
-    // Year is an input field - try to find and type into it
-    const yearSelector = 'input[name="year"], input[name="dobYear"], input[name="birthYear"], input[placeholder*="Year"], input[placeholder*="year"]';
-    if (await page.$(yearSelector)) {
-      await page.type(yearSelector, year.toString());
-    }
-  } catch (e) {
-    console.log("Date of birth fields not found or error occurred:", e);
-  }
-
-  // Handle state dropdown - the form has a state selector
-  try {
-    // Try multiple possible selectors for state
-    const stateSelectors = [
-      'select[name="state"]',
-      'select[name="province"]',
-      'select[name="region"]',
-      'select[data-testid*="state"]',
-      'select[id*="state"]'
-    ];
-
-    let stateSelector = null;
-    for (const selector of stateSelectors) {
-      if (await page.$(selector)) {
-        stateSelector = selector;
-        break;
-      }
-    }
-
-    if (stateSelector) {
-      // Find the option that contains our state name
-      const stateOptions = await page.$$eval(`${stateSelector} option`, (options: any[]) =>
-        options.map((opt: any) => ({ value: opt.value, text: opt.textContent }))
-      );
-
-      // Try to find exact match first, then partial match
-      let selectedValue = null;
-      for (const option of stateOptions) {
-        if (option.text.toLowerCase().includes(user.location.toLowerCase()) ||
-          option.value.toLowerCase().includes(user.location.toLowerCase())) {
-          selectedValue = option.value;
-          break;
-        }
-      }
-
-      if (selectedValue) {
-        await page.select(stateSelector, selectedValue);
-      } else {
-        console.log(`Could not find state option for: ${user.location}`);
-        console.log(`User state: ${user.location}`);
-        console.log(`Available options: ${stateOptions.map((opt: any) => `${opt.text} (${opt.value})`).join(', ')}`);
-      }
-    } else {
-      console.log("No state selector found with any of the attempted selectors");
-    }
+    const [firstName = '', lastName = ''] = user.name.split(' ');
+    await page.type('input[name="firstName"], input[name="first_name"], input[name="firstname"]', firstName);
+    await page.type('input[name="lastName"], input[name="last_name"], input[name="lastname"]', lastName);
 
     try {
-      const termsCheckbox = await page.$('input[type="checkbox"], input[name="terms"], input[name="agreement"]');
-      if (termsCheckbox) {
-        await termsCheckbox.click();
+      const dobDate = new Date(user.dob);
+      const month = dobDate.getMonth() + 1; // getMonth() returns 0-11
+      const day = dobDate.getDate();
+      const year = dobDate.getFullYear();
+
+      // Month is a dropdown - try to find and select it
+      const monthSelector = 'select[name="month"], select[name="dobMonth"], select[name="birthMonth"]';
+      if (await page.$(monthSelector)) {
+        await page.select(monthSelector, month.toString());
+      }
+
+      // Day is an input field - try to find and type into it
+      const daySelector = 'input[name="day"], input[name="dobDay"], input[name="birthDay"], input[placeholder*="Day"], input[placeholder*="day"]';
+      if (await page.$(daySelector)) {
+        await page.type(daySelector, day.toString());
+      }
+
+      // Year is an input field - try to find and type into it
+      const yearSelector = 'input[name="year"], input[name="dobYear"], input[name="birthYear"], input[placeholder*="Year"], input[placeholder*="year"]';
+      if (await page.$(yearSelector)) {
+        await page.type(yearSelector, year.toString());
       }
     } catch (e) {
-      console.log("Error checking terms checkbox:", e);
+      console.log("Date of birth fields not found or error occurred:", e);
     }
-  } catch (e) {
-    console.log("State dropdown not found or error occurred:", e);
-  }
 
-  // Submit the form
-  try {
-    const submitButton = await page.$('button[data-testid="button-base"][type="submit"]');
-    if (submitButton) {
+    // Handle state dropdown - the form has a state selector
+    try {
+      // Try multiple possible selectors for state
+      const stateSelectors = [
+        'select[name="state"]',
+        'select[name="province"]',
+        'select[name="region"]',
+        'select[data-testid*="state"]',
+        'select[id*="state"]'
+      ];
 
-      // Wait for the button to become enabled (max 10 seconds)
-      let attempts = 0;
-      const maxAttempts = 20; // 20 attempts * 500ms = 10 seconds
-
-      while (attempts < maxAttempts) {
-        const isDisabled = await page.evaluate((btn: any) => btn.disabled, submitButton);
-        if (!isDisabled) {
+      let stateSelector = null;
+      for (const selector of stateSelectors) {
+        if (await page.$(selector)) {
+          stateSelector = selector;
           break;
         }
-        await new Promise(resolve => setTimeout(resolve, 500));
-        attempts++;
       }
 
-      // Click the button
-      await submitButton.click();
+      if (stateSelector) {
+        // Find the option that contains our state name
+        const stateOptions = await page.$$eval(`${stateSelector} option`, (options: any[]) =>
+          options.map((opt: any) => ({ value: opt.value, text: opt.textContent }))
+        );
 
-      // Wait for form submission to process
-      await new Promise(resolve => setTimeout(resolve, 2000));
+        // Try to find exact match first, then partial match
+        let selectedValue = null;
+        for (const option of stateOptions) {
+          if (option.text.toLowerCase().includes(user.location.toLowerCase()) ||
+            option.value.toLowerCase().includes(user.location.toLowerCase())) {
+            selectedValue = option.value;
+            break;
+          }
+        }
 
+        if (selectedValue) {
+          await page.select(stateSelector, selectedValue);
+        } else {
+          console.log(`Could not find state option for: ${user.location}`);
+          console.log(`User state: ${user.location}`);
+          console.log(`Available options: ${stateOptions.map((opt: any) => `${opt.text} (${opt.value})`).join(', ')}`);
+        }
+      } else {
+        console.log("No state selector found with any of the attempted selectors");
+      }
+
+      try {
+        const termsCheckbox = await page.$('input[type="checkbox"], input[name="terms"], input[name="agreement"]');
+        if (termsCheckbox) {
+          await termsCheckbox.click();
+        }
+      } catch (e) {
+        console.log("Error checking terms checkbox:", e);
+      }
+    } catch (e) {
+      console.log("State dropdown not found or error occurred:", e);
     }
-  } catch (e) {
-    console.log("Error submitting form:", e);
+
+    // Submit the form
+    try {
+      const submitButton = await page.$('button[data-testid="button-base"][type="submit"]');
+      if (submitButton) {
+
+        // Wait for the button to become enabled (max 10 seconds)
+        let attempts = 0;
+        const maxAttempts = 20; // 20 attempts * 500ms = 10 seconds
+
+        while (attempts < maxAttempts) {
+          const isDisabled = await page.evaluate((btn: any) => btn.disabled, submitButton);
+          if (!isDisabled) {
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, 500));
+          attempts++;
+        }
+
+        // Click the button
+        await submitButton.click();
+        console.log("Form submitted, waiting for page to update...");
+
+        // Wait for form submission to process
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Take a screenshot to see what the page looks like after form submission
+        try {
+          await page.screenshot({ path: "after-form-submission.png" });
+          console.log("Screenshot saved as after-form-submission.png");
+        } catch (e) {
+          console.log("Could not take screenshot:", e);
+        }
+        
+        // Check if the "Play Now" button appears immediately after form submission
+        const playNowButton = await findPlayNowButton(page);
+        if (playNowButton) {
+          console.log("Found 'Play Now' button immediately after form submission!");
+          await playNowButton.click();
+          console.log("Clicked 'Play Now' button successfully!");
+          
+          // Wait for any popups or modals to appear
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+          // Handle any popups that might appear
+          const firstPopupClosed = await handleFirstPopup(page);
+          if (firstPopupClosed) {
+            console.log("First popup handled successfully");
+          }
+          
+          const secondPopupHandled = await handleSecondPopup(page);
+          if (secondPopupHandled) {
+            console.log("Second popup handled successfully");
+          }
+          
+          return "completed"; // Special return value to indicate completion
+        } else {
+          console.log("No 'Play Now' button found immediately after form submission, continuing with email verification flow...");
+          return "form_filled"; // Indicate form was filled but button not found
+        }
+      } else {
+        // If no submit button found, try pressing Enter on the form
+        console.log("No submit button found, trying to press Enter on the form...");
+        
+        // Find the form and press Enter
+        const form = await page.$('form');
+        if (form) {
+          await form.press('Enter');
+          console.log("Pressed Enter on form");
+          
+          // Wait for form submission to process
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+          // Take a screenshot to see what the page looks like after form submission
+          try {
+            await page.screenshot({ path: "after-enter-press.png" });
+            console.log("Screenshot saved as after-enter-press.png");
+          } catch (e) {
+            console.log("Could not take screenshot:", e);
+          }
+          
+          // Check if the "Play Now" button appears after pressing Enter
+          const playNowButton = await findPlayNowButton(page);
+          if (playNowButton) {
+            console.log("Found 'Play Now' button after pressing Enter!");
+            await playNowButton.click();
+            console.log("Clicked 'Play Now' button successfully!");
+            
+            // Wait for any popups or modals to appear
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            // Handle any popups that might appear
+            const firstPopupClosed = await handleFirstPopup(page);
+            if (firstPopupClosed) {
+              console.log("First popup handled successfully");
+            }
+            
+            const secondPopupHandled = await handleSecondPopup(page);
+            if (secondPopupHandled) {
+              console.log("Second popup handled successfully");
+            }
+            
+            return "completed"; // Special return value to indicate completion
+          } else {
+            console.log("No 'Play Now' button found after pressing Enter, continuing with email verification flow...");
+            return "form_filled"; // Indicate form was filled but button not found
+          }
+        } else {
+          console.log("No form found to press Enter on");
+          return "form_filled";
+        }
+      }
+    } catch (e) {
+      console.log("Error submitting form:", e);
+      return "error";
+    }
+
+    return "form_filled";
+  } catch (error) {
+    console.log("Error filling registration form:", error);
+    return "error";
   }
 }
 
@@ -446,4 +593,178 @@ export async function clickButtonWithRetry(page: any, button: any, buttonDescrip
 
   console.log(`Failed to click ${buttonDescription} after all attempts`);
   return false;
+}
+
+// Function to check if we're already on a page with the "Start Winning Now" button
+export async function checkIfAlreadyOnPostVerificationPage(page: any): Promise<boolean> {
+  try {
+    // Wait for page to load
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Look for buttons that indicate we're on the post-verification page
+    const allButtons = await page.$$('button');
+    const buttonTexts = [];
+
+    for (let i = 0; i < Math.min(allButtons.length, 20); i++) {
+      try {
+        const buttonText = await page.evaluate((btn: any) => btn.textContent?.trim() || '', allButtons[i]);
+        buttonTexts.push(buttonText.toLowerCase());
+      } catch (e) {
+        // Continue to next button
+      }
+    }
+
+    // Check if any button text suggests we're on the post-verification page
+    const postVerificationIndicators = [
+      'start winning now',
+      'start winning',
+      'play now',
+      'play',
+      'continue',
+      'get started',
+      'begin',
+      'start'
+    ];
+
+    for (const indicator of postVerificationIndicators) {
+      if (buttonTexts.some(text => text.includes(indicator))) {
+        console.log(`Found post-verification indicator: "${indicator}"`);
+        return true;
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.log("Error checking if on post-verification page:", error);
+    return false;
+  }
+}
+
+// Function to find the "Play Now" button
+async function findPlayNowButton(page: any): Promise<any> {
+  try {
+    console.log("Searching for 'Play Now' button...");
+
+    // Wait a bit more for the page to fully load
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Take a screenshot to see what the page looks like
+    try {
+      await page.screenshot({ path: "searching-for-button.png" });
+      console.log("Screenshot saved as searching-for-button.png");
+    } catch (e) {
+      console.log("Could not take screenshot:", e);
+    }
+
+    // Strategy 1: Look for button with exact text "Play Now" using page.evaluate
+    const allButtons = await page.$$('button');
+    console.log(`Found ${allButtons.length} buttons on the page`);
+
+    // Log all button texts for debugging
+    for (let i = 0; i < allButtons.length; i++) {
+      try {
+        const buttonText = await page.evaluate((btn: any) => btn.textContent?.trim() || '', allButtons[i]);
+        const buttonVisible = await page.evaluate((btn: any) => {
+          const rect = btn.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0 && btn.offsetParent !== null;
+        }, allButtons[i]);
+
+        console.log(`Button ${i}: text="${buttonText}", visible=${buttonVisible}`);
+
+        if (buttonText.toLowerCase() === 'play now' && buttonVisible) {
+          console.log(`Found 'Play Now' button at index ${i} with text: "${buttonText}"`);
+          return allButtons[i];
+        }
+      } catch (e) {
+        console.log(`Error reading button ${i}:`, e);
+      }
+    }
+
+    // Strategy 2: Look for buttons with specific attributes that might indicate "Play Now"
+    const buttonByAttr = await page.$('button[data-testid*="play"], button[data-testid*="submit"], button[class*="play"], button[class*="submit"]');
+    if (buttonByAttr) {
+      const buttonText = await page.evaluate((btn: any) => btn.textContent?.trim() || '', buttonByAttr);
+      console.log(`Found button by attributes with text: "${buttonText}"`);
+      if (buttonText.toLowerCase().includes('play') || buttonText.toLowerCase().includes('submit')) {
+        return buttonByAttr;
+      }
+    }
+
+    // Strategy 3: Look for any button that might be the submit button
+    const submitButtons = await page.$$('button[type="submit"], button[data-testid*="button"], button[class*="btn"]');
+    for (const button of submitButtons) {
+      try {
+        const buttonText = await page.evaluate((btn: any) => btn.textContent?.trim() || '', button);
+        console.log(`Submit button candidate: "${buttonText}"`);
+        if (buttonText.toLowerCase().includes('play') || buttonText.toLowerCase().includes('now') || buttonText.toLowerCase().includes('submit')) {
+          console.log(`Found submit button with text: "${buttonText}"`);
+          return button;
+        }
+      } catch (e) {
+        // Continue to next button
+      }
+    }
+
+    // Strategy 4: Look for any button with "play" or "now" in the text (case insensitive)
+    for (let i = 0; i < allButtons.length; i++) {
+      try {
+        const buttonText = await page.evaluate((btn: any) => btn.textContent?.trim() || '', allButtons[i]);
+        if (buttonText.toLowerCase().includes('play') || buttonText.toLowerCase().includes('now')) {
+          console.log(`Found button with 'play' or 'now' in text: "${buttonText}"`);
+          return allButtons[i];
+        }
+      } catch (e) {
+        // Continue to next button
+      }
+    }
+
+    // Strategy 5: Look for the button by examining the page HTML more directly
+    try {
+      const pageContent = await page.content();
+      console.log("Page HTML length:", pageContent.length);
+
+      // Look for buttons in the HTML that might contain "Play Now"
+      const buttonMatches = pageContent.match(/<button[^>]*>.*?Play Now.*?<\/button>/gi);
+      if (buttonMatches) {
+        console.log("Found button HTML matches:", buttonMatches);
+      }
+
+      // Try to find by more specific selectors
+      const specificButton = await page.$('button:contains("Play Now"), button:contains("play now"), button:contains("Play"), button:contains("play")');
+      if (specificButton) {
+        console.log("Found button using :contains selector");
+        return specificButton;
+      }
+    } catch (e) {
+      console.log("Error examining page HTML:", e);
+    }
+
+    // Strategy 6: Try to find by looking at all elements, not just buttons
+    try {
+      const allElements = await page.$$('*');
+      console.log(`Found ${allElements.length} total elements on the page`);
+
+      for (let i = 0; i < Math.min(allElements.length, 100); i++) {
+        try {
+          const tagName = await page.evaluate((el: any) => el.tagName?.toLowerCase() || '', allElements[i]);
+          const textContent = await page.evaluate((el: any) => el.textContent?.trim() || '', allElements[i]);
+
+          if (tagName === 'button' && textContent.toLowerCase().includes('play now')) {
+            console.log(`Found button element at index ${i} with text: "${textContent}"`);
+            return allElements[i];
+          }
+        } catch (e) {
+          // Continue to next element
+        }
+      }
+    } catch (e) {
+      console.log("Error examining all elements:", e);
+    }
+
+    console.log("No 'Play Now' button found with any strategy");
+    return null;
+  } catch (error) {
+    console.log("Error finding Play Now button:", error);
+    return null;
+  }
 }

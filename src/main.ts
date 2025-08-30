@@ -7,8 +7,8 @@ let page: Page | null = null;
 
 async function main() {
   const browser = await puppeteer.launch({
-    // headless,
-    // defaultViewport: { width: 1280, height: 720 },
+    headless,
+    defaultViewport: { width: 1280, height: 720 },
   });
 
   console.log("Wink Enterprises 😉");
